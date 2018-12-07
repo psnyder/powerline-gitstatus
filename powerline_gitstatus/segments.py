@@ -73,7 +73,7 @@ class GitStatusSegment(Segment):
         if not line:
             return ('', False, 0, 0)
 
-        match = re.search('\/(.*)\.git$', line)
+        match = re.search('\/([^\/]*)\.git$', line)
         if match is not None:
             pl.debug(match.group(1))
             return (match.group(1), True, 0, 0)
