@@ -69,6 +69,17 @@ class GitStatusSegment(Segment):
 
         return (line, False, 0, 0)
 
+    def parse_repo(self, pl, line):
+        if not line:
+            return ('', False, 0, 0)
+
+        match = re.search('\/(.*)\.git$', line)
+        if match is not None:
+            pl.debug(match.group(1))
+            return (match.group(1), True, 0, 0)
+
+        return (line, False, 0, 0)
+
     def parse_status(self, lines):
         staged    = len([True for l in lines if l[0] in 'MRC' or (l[0] == 'D' and l[1] != 'D') or (l[0] == 'A' and l[1] != 'A')])
         unmerged  = len([True for l in lines if l[0] == 'U' or l[1] == 'U' or (l[0] == 'A' and l[1] == 'A') or (l[0] == 'D' and l[1] == 'D')])
@@ -77,7 +88,7 @@ class GitStatusSegment(Segment):
 
         return (staged, unmerged, changed, untracked)
 
-    def build_segments(self, branch, detached, tag, behind, ahead, staged, unmerged, changed, untracked, stashed):
+    def build_segments(self, branch, detached, tag, behind, ahead, staged, unmerged, changed, untracked, stashed, repo, pl):
         if detached:
             branch_group = 'gitstatus_branch_detached'
         elif staged or unmerged or changed or untracked:
@@ -85,9 +96,16 @@ class GitStatusSegment(Segment):
         else:
             branch_group = 'gitstatus_branch_clean'
 
-        segments = [
-            {'contents': u'\ue0a0 %s' % branch, 'highlight_groups': [branch_group, 'gitstatus_branch', 'gitstatus'], 'divider_highlight_group': 'gitstatus:divider'}
-        ]
+        segments = []
+
+        # repoBranch = u'\ue0b0 %s \ue0b2 \ue0a0 %s' % (repo, branch)
+        repoBranch = u'%s \ue0a0 %s' % (repo, branch)
+        # pl.debug(repoBranch)
+
+        segments.append({'contents': repoBranch, 'highlight_groups': [branch_group, 'gitstatus_branch', 'gitstatus'], 'divider_highlight_group': 'gitstatus:divider'})
+
+        # if repo:
+        #     segments.append({'contents': u'\ue0a0 %s' % repo, 'highlight_groups': [branch_group, 'gitstatus_branch', 'gitstatus'], 'divider_highlight_group': 'gitstatus:divider'})
 
         if tag:
             segments.append({'contents': u' \u2605 %s' % tag, 'highlight_groups': ['gitstatus_tag', 'gitstatus'], 'divider_highlight_group': 'gitstatus:divider'})
@@ -131,6 +149,16 @@ class GitStatusSegment(Segment):
         if not branch:
             return
 
+        # cmd = 'basename $(git config --get remote.origin.url) .git'
+        cmd = base + ['config', '--get', 'remote.origin.url']
+        repoStatus, repoErr = self.execute(pl, cmd)
+        pl.debug(repoStatus)
+
+        if repoErr and ('error' in repoErr[0] or 'fatal' in repoErr[0]):
+            return
+
+        repo, flag, b1, b2 = self.parse_repo(pl, repoStatus.pop(0))
+
         if branch == 'HEAD':
             branch = self.execute(pl, base + ['rev-parse', '--short', 'HEAD'])[0][0]
 
@@ -148,7 +176,10 @@ class GitStatusSegment(Segment):
         else:
             tag = ''
 
-        return self.build_segments(branch, detached, tag, behind, ahead, staged, unmerged, changed, untracked, stashed)
+        # return self.build_segments(branch, detached, tag, behind, ahead, staged, unmerged, changed, untracked, stashed, repo)
+        segments = self.build_segments(branch, detached, tag, behind, ahead, staged, unmerged, changed, untracked, stashed, repo, pl)
+        pl.debug(segments)
+        return segments
 
 
 gitstatus = with_docstring(GitStatusSegment(),
